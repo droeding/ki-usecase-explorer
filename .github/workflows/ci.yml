@@ -1,0 +1,136 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '20.x'
+  WASP_VERSION: '0.15.1'
+
+jobs:
+  # Quality Gates - run on all branches
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npm run lint
+      continue-on-error: true
+
+    - name: Run type checking
+      run: npm run type-check
+      continue-on-error: true
+
+    - name: Run unit tests
+      run: npm run test:unit
+
+    - name: Run integration tests
+      run: npm run test:integration
+
+    - name: Generate coverage report
+      run: npm run test:coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/lcov.info
+      continue-on-error: true
+
+  # Build validation
+  build-validation:
+    runs-on: ubuntu-latest
+    needs: quality-gates
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install Wasp
+      run: |
+        curl -sSL https://get.wasp-lang.dev/installer.sh | sh -s -- -v ${{ env.WASP_VERSION }}
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build Wasp project
+      run: wasp build
+
+    - name: Validate build artifacts
+      run: |
+        test -d .wasp/build/server || exit 1
+        test -d .wasp/build/web-app || exit 1
+
+  # Deploy only on main branch
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [quality-gates, build-validation]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install Wasp
+      run: |
+        curl -sSL https://get.wasp-lang.dev/installer.sh | sh -s -- -v ${{ env.WASP_VERSION }}
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install project dependencies
+      run: npm ci
+
+    - name: Build Wasp project
+      run: wasp build
+
+    - name: Install server dependencies
+      run: |
+        cd .wasp/build/server
+        npm ci --only=production
+        npm install zod @prisma/client lucia @lucia-auth/adapter-prisma @node-rs/argon2 oslo @sendgrid/mail
+
+    - name: Bundle server for deployment
+      run: |
+        cd .wasp/build/server
+        npm run bundle
+
+    - name: Create deployment package
+      run: |
+        cd .wasp/build/server
+        zip -r ../../../deployment.zip . -x "src/*" "*.ts" "rollup.config.js" "tsconfig.json" "*.log"
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ki-usecase-explorer
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: './deployment.zip'
+
+    - name: Notify deployment success
+      run: |
+        echo "✅ Successfully deployed to production!"
+        echo "🔗 URL: https://ki-usecase-explorer.azurewebsites.net"
