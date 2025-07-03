@@ -43,7 +43,7 @@
     // Wasp internally uses TypeScript's project references to compile the
     // code. Referenced projects may not disable emit, so we must specify an
     // outDir.
-    "outDir": ".wasp/out/user"
+    "outDir": ".wasp/phantom"
   },
   "include": [
     "src"
