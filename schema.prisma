@@ -1,0 +1,62 @@
+datasource db {
+  provider = "postgresql"
+  // Wasp requires that the url is set to the DATABASE_URL environment variable.
+  url      = env("DATABASE_URL")
+}
+
+// Wasp requires the `prisma-client-js` generator to be present.
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  isAdmin     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  evaluations Evaluation[]
+  favoriteUseCases UseCase[] @relation("UserFavorites")
+}
+
+model UseCase {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String?
+  businessArea         String?
+  maturityLevel        String?
+  problemStatement     String?
+  solutionDescription  String?
+  businessValue        String?
+  techStack            String?
+  effortEstimation     String?
+  expectedBenefit      String?
+  implementationEffort String?
+  riskAssessment       String?
+  priority             String?
+  createdAt           DateTime @default(now())
+  
+  // Relations
+  evaluations         Evaluation[]
+  favoritedBy         User[]       @relation("UserFavorites")
+  
+  @@map("use_cases")
+}
+
+model Evaluation {
+  id        String          @id @default(cuid())
+  value     String          // Changed from enum to String for SQLite compatibility
+  createdAt DateTime        @default(now())
+  
+  // Relations
+  useCase   UseCase @relation(fields: [useCaseId], references: [id])
+  useCaseId String
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  
+  // Constraints
+  @@unique([useCaseId, userId])
+  @@map("evaluations")
+}

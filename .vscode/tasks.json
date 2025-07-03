@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Test User Registration",
+			"type": "shell",
+			"command": "wasp db seed",
+			"group": "test",
+			"isBackground": false
+		}
+	]
+}

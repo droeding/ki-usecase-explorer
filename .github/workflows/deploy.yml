@@ -1,0 +1,63 @@
+name: Deploy Backend to Azure Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  WASP_VERSION: '0.15.1'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install Wasp
+      run: |
+        curl -sSL https://get.wasp-lang.dev/installer.sh | sh -s -- -v ${{ env.WASP_VERSION }}
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install project dependencies
+      run: |
+        npm ci
+
+    - name: Build Wasp project
+      run: |
+        wasp build
+
+    - name: Install server dependencies
+      run: |
+        cd .wasp/build/server
+        npm ci --only=production
+        npm install zod @prisma/client lucia @lucia-auth/adapter-prisma @node-rs/argon2 oslo @sendgrid/mail
+
+    - name: Bundle server for deployment
+      run: |
+        cd .wasp/build/server
+        npm run bundle
+
+    - name: Create deployment package
+      run: |
+        cd .wasp/build/server
+        zip -r ../../../deployment.zip . -x "src/*" "*.ts" "rollup.config.js" "tsconfig.json" "*.log"
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ki-usecase-backend-app
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: './deployment.zip'
+

@@ -1,0 +1,60 @@
+version: 4.21.1
+markdownExploder: true
+# Bechtle Ki Use-Case Explorer Project Configuration
+projectName: "Ki Use-Case Explorer"
+projectType: "wasp-fullstack"
+businessDomain: "AI Use-Case Evaluation Platform"
+targetUsers: "Bechtle employees, IT consultants, business analysts"
+
+prd:
+  prdFile: docs/prd.md
+  prdVersion: v4
+  prdSharded: true
+  prdShardedLocation: docs/prd
+  epicFilePattern: epic-{n}*.md
+
+architecture:
+  architectureFile: docs/architecture.md
+  architectureVersion: v4
+  architectureSharded: true
+  architectureShardedLocation: docs/architecture
+
+customTechnicalDocuments: 
+  - docs/AZURE_DEPLOYMENT.md
+  - .github/copilot-instructions.md
+
+devLoadAlwaysFiles:
+  - docs/architecture/coding-standards.md
+  - docs/architecture/tech-stack.md
+  - docs/architecture/source-tree.md
+  - .github/copilot-instructions.md
+
+devDebugLog: .ai/debug-log.md
+devStoryLocation: docs/stories
+
+workflow:
+  planFile: docs/workflow-plan.md
+  trackProgress: true
+  enforceSequence: false
+  updateOnCompletion: true
+
+# Wasp-specific settings
+wasp:
+  mainConfig: main.wasp
+  dbProvider: SQLite # Development
+  dbProviderProduction: PostgreSQL
+  authProvider: email
+  emailProvider: SendGrid # Production
+  deploymentTarget: azure-static-web-apps
+
+# Bechtle-specific settings
+bechtle:
+  primaryColor: "#00B04F"
+  secondaryColor: "#004B87"
+  mobileFirst: true
+  evaluationSystem: "HIGH/MEDIUM/LOW"
+  businessAreas:
+    - "IT Services"
+    - "Consulting" 
+    - "Infrastructure"
+    - "Digital Transformation"

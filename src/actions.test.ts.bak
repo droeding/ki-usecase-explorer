@@ -1,0 +1,377 @@
+// Unit Tests for Wasp Actions
+// Following Testing Strategy: Authentication validation and error handling
+
+import { HttpError } from 'wasp/server';
+import { 
+  submitEvaluation, 
+  updateUseCase, 
+  deleteEvaluation 
+} from './actions';
+import type { Prisma } from '@prisma/client';
+
+// Mock Wasp entities and context
+const mockContext = {
+  entities: {
+    Evaluation: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    } as unknown as Prisma.EvaluationDelegate<any>,
+    UseCase: {
+      update: jest.fn(),
+    } as unknown as Prisma.UseCaseDelegate<any>,
+  },
+  user: null as any
+};
+
+describe('Wasp Actions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('submitEvaluation', () => {
+    it('should create new evaluation for authenticated user', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+      
+      const args = {
+        useCaseId: 'use-case-1',
+        value: 'HIGH'
+      };
+
+      const newEvaluation = {
+        id: 'eval-1',
+        value: 'HIGH',
+        useCaseId: 'use-case-1',
+        userId: 'user-1'
+      };
+
+      // Mock no existing evaluation
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(null);
+      contextWithUser.entities.Evaluation.create.mockResolvedValue(newEvaluation);
+
+      // Act
+      const result = await submitEvaluation(args, contextWithUser);
+
+      // Assert
+      expect(result).toEqual(newEvaluation);
+      expect(contextWithUser.entities.Evaluation.findUnique).toHaveBeenCalledWith({
+        where: {
+          useCaseId_userId: {
+            useCaseId: 'use-case-1',
+            userId: 'user-1'
+          }
+        }
+      });
+      expect(contextWithUser.entities.Evaluation.create).toHaveBeenCalledWith({
+        data: {
+          value: 'HIGH',
+          useCaseId: 'use-case-1',
+          userId: 'user-1'
+        }
+      });
+    });
+
+    it('should update existing evaluation for authenticated user', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+      
+      const args = {
+        useCaseId: 'use-case-1',
+        value: 'MEDIUM'
+      };
+
+      const existingEvaluation = {
+        id: 'eval-1',
+        value: 'HIGH',
+        useCaseId: 'use-case-1',
+        userId: 'user-1'
+      };
+
+      const updatedEvaluation = {
+        ...existingEvaluation,
+        value: 'MEDIUM'
+      };
+
+      // Mock existing evaluation
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(existingEvaluation);
+      contextWithUser.entities.Evaluation.update.mockResolvedValue(updatedEvaluation);
+
+      // Act
+      const result = await submitEvaluation(args, contextWithUser);
+
+      // Assert
+      expect(result).toEqual(updatedEvaluation);
+      expect(contextWithUser.entities.Evaluation.update).toHaveBeenCalledWith({
+        where: { id: 'eval-1' },
+        data: { value: 'MEDIUM' }
+      });
+    });
+
+    it('should throw 401 error when user not authenticated', async () => {
+      // Arrange
+      const args = {
+        useCaseId: 'use-case-1',
+        value: 'HIGH'
+      };
+
+      const contextWithoutUser = {
+        ...mockContext,
+        user: null
+      };
+
+      // Act & Assert
+      await expect(submitEvaluation(args, contextWithoutUser))
+        .rejects
+        .toThrow('User must be authenticated to submit evaluation');
+    });
+
+    it('should validate evaluation values', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+      
+      const validValues = ['HIGH', 'MEDIUM', 'LOW'];
+      
+      // Test each valid value
+      for (const value of validValues) {
+        const args = {
+          useCaseId: 'use-case-1',
+          value
+        };
+
+        contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(null);
+        contextWithUser.entities.Evaluation.create.mockResolvedValue({
+          id: 'eval-1',
+          value,
+          useCaseId: 'use-case-1',
+          userId: 'user-1'
+        });
+
+        // Act
+        const result = await submitEvaluation(args, contextWithUser);
+
+        // Assert
+        expect(result.value).toBe(value);
+      }
+    });
+  });
+
+  describe('updateUseCase', () => {
+    it('should update use case for authenticated user', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'admin-1', email: 'admin@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+
+      const args = {
+        id: 'use-case-1',
+        data: {
+          title: 'Updated Use Case Title',
+          description: 'Updated description'
+        }
+      };
+
+      const updatedUseCase = {
+        id: 'use-case-1',
+        title: 'Updated Use Case Title',
+        description: 'Updated description'
+      };
+
+      contextWithUser.entities.UseCase.update.mockResolvedValue(updatedUseCase);
+
+      // Act
+      const result = await updateUseCase(args, contextWithUser);
+
+      // Assert
+      expect(result).toEqual(updatedUseCase);
+      expect(contextWithUser.entities.UseCase.update).toHaveBeenCalledWith({
+        where: { id: 'use-case-1' },
+        data: args.data
+      });
+    });
+
+    it('should throw 401 error when user not authenticated', async () => {
+      // Arrange
+      const args = {
+        id: 'use-case-1',
+        data: { title: 'Updated Title' }
+      };
+
+      const contextWithoutUser = {
+        ...mockContext,
+        user: null
+      };
+
+      // Act & Assert
+      await expect(updateUseCase(args, contextWithoutUser))
+        .rejects
+        .toThrow('Authentication required');
+    });
+
+    it('should handle database update errors', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'admin-1', email: 'admin@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+
+      const args = {
+        id: 'non-existent-id',
+        data: { title: 'Updated Title' }
+      };
+
+      const dbError = new Error('Use case not found');
+      contextWithUser.entities.UseCase.update.mockRejectedValue(dbError);
+
+      // Act & Assert
+      await expect(updateUseCase(args, contextWithUser))
+        .rejects
+        .toThrow('Use case not found');
+    });
+  });
+
+  describe('deleteEvaluation', () => {
+    it('should delete evaluation when user owns it', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+
+      const args = {
+        evaluationId: 'eval-1'
+      };
+
+      const evaluation = {
+        id: 'eval-1',
+        value: 'HIGH',
+        userId: 'user-1',
+        useCaseId: 'use-case-1'
+      };
+
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(evaluation);
+      contextWithUser.entities.Evaluation.delete.mockResolvedValue(evaluation);
+
+      // Act
+      const result = await deleteEvaluation(args, contextWithUser);
+
+      // Assert
+      expect(result).toEqual(evaluation);
+      expect(contextWithUser.entities.Evaluation.delete).toHaveBeenCalledWith({
+        where: { id: 'eval-1' }
+      });
+    });
+
+    it('should throw 401 error when user not authenticated', async () => {
+      // Arrange
+      const args = {
+        evaluationId: 'eval-1'
+      };
+
+      const contextWithoutUser = {
+        ...mockContext,
+        user: null
+      };
+
+      // Act & Assert
+      await expect(deleteEvaluation(args, contextWithoutUser))
+        .rejects
+        .toThrow('Authentication required');
+    });
+
+    it('should throw 404 error when evaluation not found', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+
+      const args = {
+        evaluationId: 'non-existent-eval'
+      };
+
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(deleteEvaluation(args, contextWithUser))
+        .rejects
+        .toThrow('Evaluation not found');
+    });
+
+    it('should throw 403 error when user tries to delete another user\'s evaluation', async () => {
+      // Arrange
+      const authenticatedUser = { id: 'user-1', email: 'test@example.com' };
+      const contextWithUser = {
+        ...mockContext,
+        user: authenticatedUser
+      };
+
+      const args = {
+        evaluationId: 'eval-1'
+      };
+
+      const evaluation = {
+        id: 'eval-1',
+        value: 'HIGH',
+        userId: 'different-user-id', // Different user owns this evaluation
+        useCaseId: 'use-case-1'
+      };
+
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(evaluation);
+
+      // Act & Assert
+      await expect(deleteEvaluation(args, contextWithUser))
+        .rejects
+        .toThrow('Cannot delete another user\'s evaluation');
+    });
+
+    it('should validate HttpError status codes', async () => {
+      // Arrange
+      const contextWithoutUser = {
+        ...mockContext,
+        user: null
+      };
+
+      // Act & Assert
+      try {
+        await deleteEvaluation({ evaluationId: 'eval-1' }, contextWithoutUser);
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpError);
+        expect((error as HttpError).statusCode).toBe(401);
+      }
+
+      // Test 404 error
+      const contextWithUser = {
+        ...mockContext,
+        user: { id: 'user-1', email: 'test@example.com' }
+      };
+      
+      contextWithUser.entities.Evaluation.findUnique.mockResolvedValue(null);
+
+      try {
+        await deleteEvaluation({ evaluationId: 'non-existent' }, contextWithUser);
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpError);
+        expect((error as HttpError).statusCode).toBe(404);
+      }
+    });
+  });
+});

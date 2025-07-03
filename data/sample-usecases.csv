@@ -1,0 +1,4 @@
+title,description,businessArea,maturityLevel,problemStatement,solutionDescription,expectedBenefit,implementationEffort,riskAssessment,priority
+"Automatisierte Kundenberatung","KI-basierte Chatbots für 24/7 Kundensupport","Kundenservice","Pilot","Lange Wartezeiten im Kundensupport","Implementierung eines intelligenten Chatbots","Reduzierung der Supportkosten um 30%","Mittel","Gering","HIGH"
+"Predictive Maintenance","Vorhersage von Ausfällen in der Produktion","Produktion","Draft","Ungeplante Maschinenausfälle verursachen hohe Kosten","ML-Modelle zur Ausfallvorhersage","Reduzierung ungeplanter Ausfälle um 50%","Hoch","Mittel","MEDIUM"
+"Intelligente Dokumentenverarbeitung","Automatische Extraktion von Daten aus Dokumenten","Verwaltung","Production","Manuelle Dokumentenverarbeitung ist zeitaufwändig","OCR und NLP für automatische Datenextraktion","Zeitersparnis von 70% bei Dokumentenverarbeitung","Niedrig","Gering","HIGH"
